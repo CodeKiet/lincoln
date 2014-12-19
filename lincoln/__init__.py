@@ -45,10 +45,10 @@ def create_app(log_level="INFO", config="config.yml"):
     del app.logger.handlers[0]
     app.logger.setLevel(logging.NOTSET)
     log_format = logging.Formatter('%(asctime)s [%(name)s] [%(levelname)s]: %(message)s')
-    log_level = getattr(logging, str(log_level), app.config.get('log_level', "INFO"))
+    app.log_level = getattr(logging, str(log_level), app.config.get('log_level', "INFO"))
 
     logger = logging.getLogger()
-    logger.setLevel(log_level)
+    logger.setLevel(app.log_level)
     handler = logging.StreamHandler(stream=sys.stdout)
     handler.setFormatter(log_format)
     logger.addHandler(handler)
