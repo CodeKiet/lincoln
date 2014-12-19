@@ -4,15 +4,14 @@ from flask.ext.script import Manager
 from flask.ext.migrate import MigrateCommand
 from decimal import Decimal
 from collections import deque
+import signal
 
 from lincoln import create_app, db, coinserv
-from lincoln.models import Block, Transaction, Output, Address
-
-import bitcoin.core.script as op
-import bitcoin.core.serialize as serialize
+from lincoln.models import Block, Transaction, Output
 
 import time
 import datetime
+from lincoln.utils import get_addr, parse_output_sript
 
 manager = Manager(create_app)
 manager.add_command('db', MigrateCommand)
@@ -27,19 +26,21 @@ def init_db():
 
 @manager.command
 def sync():
+
+    # Kinda hacky, but simple & effective
+    loop = [1]
+
+    def handler(signum, frame):
+        loop.remove(1)
+
+    signal.signal(signal.SIGINT, handler)
+
     # Get the most recent block in our database
     highest = Block.query.order_by(Block.height.desc()).first()
-    if highest:
-        highest_hash = coinserv.getblockhash(highest.height)
-
-    # This means the coinserver and local index are on different chains
-    #if highest_hash != highest.hash:
-
-    server_height = coinserv.getinfo()['blocks']
-    server_hash = coinserv.getblockhash(server_height)
+    server_height = coinserv.getblockcount()
 
     block_times = deque([], maxlen=1000)
-    while True:
+    while loop:
         t = time.time()
         if not highest:
             curr_height = 0
@@ -78,59 +79,23 @@ def sync():
                 out_dec = Decimal(txout.nValue) / 100000000
                 tx_obj.total_out += out_dec
 
-                # Sloppy as hell destination address checking
-                # ------------------------------------------------
-                scr = []
-                try:
-                    scr = list(txout.scriptPubKey)
-                except op.CScriptTruncatedPushDataError:
-                    pass
-
                 out = Output(origin_tx=tx_obj,
                              index=i,
                              amount=out_dec)
                 db.session.add(out)
 
-                dest_address = None
-                # pay-to-pubkey-hash
-                if (len(scr) == 5 and
-                        scr[0] == op.OP_DUP and
-                        scr[1] == op.OP_HASH160 and
-                        scr[3] == op.OP_EQUALVERIFY and
-                        scr[4] == op.OP_CHECKSIG):
-                    out.type = 1
-                    dest_address = scr[2]
-                elif (len(scr) == 3 and
-                      scr[0] == op.OP_HASH160 and
-                      scr[2] == op.OP_EQUAL):
-                    out.type = 0
-                    dest_address = scr[1]
-                elif len(scr) == 2 and scr[1] == op.OP_CHECKSIG:
-                    out.type = 2
-                    dest_address = serialize.Hash160(scr[0])
-                else:
-                    out.type = 3
-                    current_app.logger.warn("Unrecognized script {}"
-                                            .format(scr))
+                dest_address, out.type = parse_output_sript(txout)
 
                 if out.type != 3:
                     addr_version = current_app.config['currency'][out.type_str + '_address_version']
                 else:
                     continue
 
-                # lookup address object matching dest_addr
-                addr = Address.query.filter_by(hash=dest_address,
-                                               version=addr_version).first()
-
-                if not addr:
-                    addr = Address(hash=dest_address,
-                                   version=addr_version,
-                                   currency=current_app.config['currency']['code'])
-                    db.session.add(addr)
-
+                addr = get_addr(dest_address, addr_version)
                 addr.transactions.append(tx_obj)
                 out.address = addr
                 db.session.flush()
+
                 # Update address total in amount
                 addr.total_in += out.amount
 
@@ -141,6 +106,7 @@ def sync():
                         index=txin.prevout.n).one()
                     obj.spent_tx = tx_obj
                     tx_obj.total_in += obj.amount
+
                     # Update address total out amount
                     obj.address.total_out += obj.amount
             else:
@@ -155,8 +121,8 @@ def sync():
 
         block_times.append(time.time() - t)
         interval = 1 if current_app.log_level == logging.DEBUG else 100
+        # Display progress information
         if curr_height % interval == 0:
-            # Display progress information
             time_per = sum(block_times) / len(block_times)
             time_remain = datetime.timedelta(
                 seconds=time_per * (server_height - curr_height))
