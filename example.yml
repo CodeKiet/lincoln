@@ -12,7 +12,9 @@ currency:
     code: "LTC"
     name: "Litecoin"
     algo: "scrypt"
-    address_version: [48, 3]
+    p2p2sh_address_version: 48
+    p2pkh_address_version: 3
+    p2pk_address_version: 3
     block_time: 600
     block_mature_confirms: 120
     trans_confirmations: 6

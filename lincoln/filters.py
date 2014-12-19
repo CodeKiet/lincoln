@@ -58,7 +58,7 @@ def human_date_utc(*args, **kwargs):
 
 def comma(value):
     if isinstance(value, (float, Decimal)):
-        return "{:,.2f}".format(value)
+        return "{:,.8f}".format(value)
     elif isinstance(value, int):
         return "{:,}".format(value)
     else:

@@ -16,10 +16,9 @@ def address(address):
     pubkey_hash = base58.decode(address)
     # Strip off the version and checksum, database doesn't store them
     pubkey_hash = pubkey_hash[1:-4]
-    outputs = (m.Output.query.options(db.joinedload('spent_tx'),
-                                      db.joinedload('origin_tx')).
-               filter_by(dest_address=pubkey_hash))
-    return render_template('address.html', outputs=outputs, address=address)
+    address_obj = m.Address.query.filter_by(hash=pubkey_hash).first()
+    return render_template('address.html', address=address,
+                           address_obj=address_obj)
 
 
 @main.route('/block/<hash>')
@@ -56,7 +55,7 @@ def favicon():
 @main.route('/search/<query>')
 def search(query):
     blob = core.lx(query)
-    
+
     # Query for items
     blocks = m.Block.query.filter(m.Block.hash.like(blob)).limit(10)
     transactions = m.Transaction.query.filter(m.Transaction.txid.like(blob)).limit(10)

@@ -5,7 +5,7 @@ from decimal import Decimal
 from collections import deque
 
 from lincoln import create_app, db, coinserv
-from lincoln.models import Block, Transaction, Output
+from lincoln.models import Block, Transaction, Output, Address
 
 import bitcoin.core.script as op
 import bitcoin.core.serialize as serialize
@@ -89,6 +89,8 @@ def sync():
                              index=i,
                              amount=out_dec)
                 db.session.add(out)
+
+                dest_address = None
                 # pay-to-pubkey-hash
                 if (len(scr) == 5 and
                         scr[0] == op.OP_DUP and
@@ -96,20 +98,40 @@ def sync():
                         scr[3] == op.OP_EQUALVERIFY and
                         scr[4] == op.OP_CHECKSIG):
                     out.type = 1
-                    out.dest_address = scr[2]
+                    dest_address = scr[2]
                 elif (len(scr) == 3 and
                       scr[0] == op.OP_HASH160 and
                       scr[2] == op.OP_EQUAL):
                     out.type = 0
-                    out.dest_address = scr[1]
+                    dest_address = scr[1]
                 elif len(scr) == 2 and scr[1] == op.OP_CHECKSIG:
                     out.type = 2
-                    out.dest_address = serialize.Hash160(scr[0])
+                    dest_address = serialize.Hash160(scr[0])
                 else:
                     out.type = 3
                     current_app.logger.info("Unrecognized script {}"
                                             .format(scr))
-            db.session.flush()
+
+                if out.type != 3:
+                    addr_version = current_app.config['currency'][out.type_str + '_address_version']
+                else:
+                    continue
+
+                # lookup address object matching dest_addr
+                addr = Address.query.filter_by(hash=dest_address,
+                                               version=addr_version).first()
+
+                if not addr:
+                    addr = Address(hash=dest_address,
+                                   version=addr_version,
+                                   currency=current_app.config['currency']['code'])
+                    db.session.add(addr)
+
+                addr.transactions.append(tx_obj)
+                out.address = addr
+                db.session.flush()
+                # Update address total in amount
+                addr.total_in += out.amount
 
             if not tx.is_coinbase():
                 for txin in tx.vin:
@@ -118,8 +140,13 @@ def sync():
                         index=txin.prevout.n).one()
                     obj.spent_tx = tx_obj
                     tx_obj.total_in += obj.amount
+                    # Update address total out amount
+                    obj.address.total_out += obj.amount
             else:
                 tx_obj.coinbase = True
+
+            # for tx in tx.vin:
+
 
             block_obj.total_in += tx_obj.total_in
             block_obj.total_out += tx_obj.total_out

@@ -1,6 +1,48 @@
-{% set title = address + " History" %}
+{% set title = "Address History - " + address %}
 {% extends "base.html" %}
 {% block content %}
-<h3>Output History for {{ address }}</h3>
-{% include "output_table.html" %}
+
+<div class="col-lg-12">
+  {% if address_obj %}
+  <h3><i class="fa fa-exchange text-primary"></i> Address Details</h3>
+  <div class="panel panel-default" style="background:none;">
+    <div class="table-responsive">
+      <table class="table big-table table-striped table-hover">
+        <tbody>
+          <tr>
+            <th width="30%">First seen</th>
+            <td>{{ address_obj.first_seen_at | human_date_utc }} ({{ address_obj.first_seen_at }} UTC)</td>
+          </tr>
+          <tr>
+            <th>Address Version</th>
+            <td>{{ address_obj.version }}</td>
+          </tr>
+          <tr>
+            <th>Total in</th>
+            <td>{{ address_obj.total_in | comma }} {{ address_obj.currency }}</td>
+          </tr>
+          <tr>
+            <th>Total out</th>
+            <td>{{ address_obj.total_out | comma }} {{ address_obj.currency }}</td>
+          </tr>
+          <tr>
+            <th>Balance</th>
+            <td>{{ address_obj.balance | comma }} {{ address_obj.currency }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="clearfix"></div>
+  {% else %}
+  <br>
+  <br>
+  <h3>Couldn't match {{ address }} to an address in our database!</h3>
+  <br>
+  <br>
+  {% endif %}
+</div>
+
+
+{#<h3>Output History for {{ address }}</h3>#}
+{#{% include "output_table.html" %}#}
 {% endblock %}
