@@ -7,11 +7,11 @@ from collections import deque
 import signal
 
 from lincoln import create_app, db, coinserv
-from lincoln.models import Block, Transaction, Output
+from lincoln.models import Block, Transaction, Output, Address
 
 import time
 import datetime
-from lincoln.utils import get_addr, parse_output_sript
+from lincoln.utils import parse_output_sript
 
 manager = Manager(create_app)
 manager.add_command('db', MigrateCommand)
@@ -91,7 +91,7 @@ def sync():
                 else:
                     continue
 
-                addr = get_addr(dest_address, addr_version)
+                addr = Address.get_addr(dest_address, addr_version)
                 addr.transactions.append(tx_obj)
                 out.address = addr
                 db.session.flush()

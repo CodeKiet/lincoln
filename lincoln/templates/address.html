@@ -1,4 +1,8 @@
-{% set title = "Address History - " + address %}
+{% if address_obj %}
+  {% set title = "Address History - " + address_obj.hash_str %}
+{% else %}
+  {% set title = "Address Not Found" %}
+{% endif %}
 {% extends "base.html" %}
 {% block content %}
 
@@ -36,9 +40,12 @@
   {% else %}
   <br>
   <br>
-  <h3>Couldn't match {{ address }} to an address in our database!</h3>
+  <h3>Couldn't match that address to one in the database!</h3>
   <br>
   <br>
+  <h3 style="margin-top:0px;"><i class="fa fa-sitemap text-warning"></i> Similar Addresses</h3>
+  {% set addresses = similar_addrs %}
+  {% include "address_table.html" %}
   {% endif %}
 </div>
 

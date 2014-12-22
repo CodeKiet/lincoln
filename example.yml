@@ -1,6 +1,8 @@
 SQLALCHEMY_DATABASE_URI: sqlite://///home/user/lincoln/lincoln/local.sqlite
 # the session encryption key
 SECRET_KEY: 'somethting_really_secret'
+# Limit number for search results
+search_result_limit: 10
 # connection information for the coinserver RPC
 coinserv:
     port: 11111

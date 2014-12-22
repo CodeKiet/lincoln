@@ -1,10 +1,7 @@
 import os
-import binascii
+import bitcoin.core as core
 
 from flask import render_template, Blueprint, send_from_directory
-
-import bitcoin.core as core
-import bitcoin.base58 as base58
 
 from . import models as m
 from . import root
@@ -14,12 +11,13 @@ main = Blueprint('main', __name__)
 
 @main.route('/address/<address>')
 def address(address):
-    pubkey_hash = base58.decode(address)
-    # Strip off the version and checksum, database doesn't store them
-    pubkey_hash = pubkey_hash[1:-4]
-    address_obj = m.Address.query.filter_by(hash=pubkey_hash).first()
-    return render_template('address.html', address=address,
-                           address_obj=address_obj)
+    # Query for matching addresses
+    similar_addrs = m.Address.get_search_results(address)
+    if len(similar_addrs) == 1:
+        return render_template('address.html', address_obj=similar_addrs[0])
+
+    return render_template('search_results.html',
+                           addresses=similar_addrs)
 
 
 @main.route('/block/<hash>')
@@ -57,23 +55,22 @@ def favicon():
 @main.route('/search/<query>')
 def search(query):
 
-    # Attempt to match query to a single block in the DB
-    block = m.Block.lookup_blockheight(query)
-    if block:
-        return render_template('block.html', block=block)
+    # Get matching addresses
+    addresses = m.Address.get_search_results(query)
+    if len(addresses) == 1:
+        return render_template('address.html', address_obj=addresses[0])
 
-    # Format query for blocks/transactions
-    try:
-        blob = core.lx(query)
-    except binascii.Error:
-        blocks = []
-        transactions = []
-    else:
-        # Query for items blocks/transactions
-        blocks = m.Block.query.filter(m.Block.hash.like(blob)).limit(10)
-        transactions = (m.Transaction.query
-                        .filter(m.Transaction.txid.like(blob)).limit(10))
+    # Get matching transactions
+    transactions = m.Transaction.get_search_results(query)
+    if len(transactions) == 1:
+        return render_template('transaction.html', transaction=transactions[0])
+
+    # Get matching blocks
+    blocks = m.Block.get_search_results(query)
+    if len(blocks) == 1:
+        return render_template('block.html', block=blocks[0])
 
     return render_template('search_results.html',
                            blocks=blocks,
-                           transactions=transactions)
+                           transactions=transactions,
+                           addresses=addresses)

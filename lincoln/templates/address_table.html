@@ -1,0 +1,30 @@
+<div class="table-responsive col-lg-12">
+  <table class="table table-striped table-hover tablesorter blockTable">
+    <thead>
+      <tr>
+        <th>Appeared</th>
+        <th>Hash</th>
+        <th>Balance</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for address in addresses %}
+    <tr>
+      <td>
+        {{ address_obj.first_seen_at | human_date_utc }} ({{ address_obj.first_seen_at }} UTC)
+      </td>
+      <td>
+        {{ address_obj.hash_str }}
+      </td>
+      <td>
+        {{ address_obj.balance | comma }} {{ address_obj.currency }}
+      </td>
+    </tr>
+    {% else %}
+    <tr>
+      <th colspan="10">No addresses matching that criteria</th>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>

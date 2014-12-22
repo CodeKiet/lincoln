@@ -1,8 +1,18 @@
 from bitcoin.core import serialize
 from flask import current_app
-from lincoln import db
-from lincoln.models import Address
 import bitcoin.core.script as op
+
+
+def get_int_from_str(str):
+    """
+    Takes a string, convert it to an int or returns False
+    """
+    try:
+        integer = int(str.replace(',', ''))
+    except ValueError:
+        return False
+    else:
+        return integer
 
 
 def parse_output_sript(txout):
@@ -37,17 +47,3 @@ def parse_output_sript(txout):
         current_app.logger.warn("Unrecognized script {}"
                                 .format(script))
     return dest_address, script_type
-
-
-def get_addr(dest_address, addr_version):
-    # lookup address object matching dest_addr
-    addr = Address.query.filter_by(hash=dest_address,
-                                   version=addr_version).first()
-
-    if not addr:
-        addr = Address(hash=dest_address,
-                       version=addr_version,
-                       currency=current_app.config['currency']['code'])
-        db.session.add(addr)
-
-    return addr

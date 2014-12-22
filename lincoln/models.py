@@ -1,7 +1,10 @@
 import calendar
+import binascii
 import bitcoin.core as core
 import bitcoin.base58 as base58
+from flask import current_app
 import sqlalchemy
+from lincoln.utils import get_int_from_str
 
 from .model_lib import base
 from . import db
@@ -52,26 +55,45 @@ class Block(base):
         return "<{} h:{} hsh:{}>".format(self.currency, self.height, self.hash_str)
 
     @classmethod
-    def lookup_blockheight(cls, query_str):
+    def format_query_str(cls, query_str):
         """
-        Takes a string, strips commas, tries to convert to int & query the DB
-        for it.
-
-        If it succeeds and finds a single entry, it returns it. Otherwise it
-        returns false.
+        Takes a string, convert it to an object which can be used to query
+        the Address class & returns it. Otherwise it returns False.
         """
         try:
-            blockheight = int(query_str.replace(',', ''))
-        except ValueError:
+            hash = core.lx(query_str)
+        except binascii.Error:
             return False
         else:
-            # If we query a single block, return the template for it
+            return hash
+
+    @classmethod
+    def get_search_results(cls, query_str):
+        """
+        Takes an address pkh, queries for addresses
+        """
+        # Check if the str is a valid blockheight
+        blockheight = get_int_from_str(query_str)
+        if blockheight:
             try:
                 block = cls.query.filter_by(height=blockheight).one()
             except sqlalchemy.exc.SQLAlchemyError:
-                return False
+                pass
             else:
-                return block
+                return [block]
+
+        # Not a blockheight, try to match it to a block hash
+        bhash = cls.format_query_str(query_str)
+        if not bhash:
+            return []
+
+        limit = current_app.config.get('search_result_limit', 10)
+        try:
+            blocks = cls.query.filter(cls.hash.like(bhash)).limit(limit).all()
+        except sqlalchemy.exc.SQLAlchemyError:
+            return []
+        else:
+            return blocks
 
 
 transaction_addresses = db.Table('transaction_addresses',
@@ -107,6 +129,38 @@ class Transaction(base):
 
     def __str__(self):
         return "<Transaction h:{}>".format(self.hash_str)
+
+    @classmethod
+    def format_query_str(cls, query_str):
+        """
+        Takes a string, convert it to an object which can be used to query
+        the Transaction class & returns it. Otherwise it returns False.
+        """
+        try:
+            hash = core.lx(query_str)
+        except binascii.Error:
+            return False
+        else:
+            return hash
+
+    @classmethod
+    def get_search_results(cls, query_str):
+        """
+        Takes an address pkh, queries for addresses
+        """
+        hash = cls.format_query_str(query_str)
+        if not hash:
+            return []
+
+        limit = current_app.config.get('search_result_limit', 10)
+        try:
+            txs = cls.query.filter(cls.txid.like(hash)).limit(limit).all()
+            print(txs)
+            print(hash)
+        except sqlalchemy.exc.SQLAlchemyError:
+            return []
+        else:
+            return txs
 
 
 class Address(base):
@@ -146,6 +200,51 @@ class Address(base):
 
     def __str__(self):
         return "<Address h:{}>".format(self.hash_str)
+
+    @classmethod
+    def get_addr(cls, address, addr_version):
+        # lookup address object matching dest_addr
+        addr = Address.query.filter_by(hash=address, version=addr_version).first()
+        if addr:
+            return addr
+
+        addr = Address(hash=address,
+                       version=addr_version,
+                       currency=current_app.config['currency']['code'])
+        db.session.add(addr)
+        db.session.flush()
+        return addr
+
+    @classmethod
+    def format_query_str(cls, query_str):
+        """
+        Takes a string, convert it to an object which can be used to query
+        the Address class & returns it. Otherwise it returns False.
+        """
+        try:
+            pubkey_hash = base58.decode(query_str)
+        except base58.InvalidBase58Error:
+            return False
+        else:
+            # Strip off the version and checksum, database doesn't store them
+            return pubkey_hash[1:-4]
+
+    @classmethod
+    def get_search_results(cls, query_str):
+        """
+        Takes an address pkh, queries for addresses
+        """
+        pkhash = cls.format_query_str(query_str)
+        if not pkhash:
+            return []
+
+        limit = current_app.config.get('search_result_limit', 10)
+        try:
+            addresses = cls.query.filter(cls.hash.like(b"%" + pkhash + b"%")).limit(limit).all()
+        except sqlalchemy.exc.SQLAlchemyError:
+            return []
+        else:
+            return addresses
 
 
 class Output(base):
