@@ -1,6 +1,7 @@
 import calendar
 import bitcoin.core as core
 import bitcoin.base58 as base58
+import sqlalchemy
 
 from .model_lib import base
 from . import db
@@ -49,6 +50,28 @@ class Block(base):
 
     def __str__(self):
         return "<{} h:{} hsh:{}>".format(self.currency, self.height, self.hash_str)
+
+    @classmethod
+    def lookup_blockheight(cls, query_str):
+        """
+        Takes a string, strips commas, tries to convert to int & query the DB
+        for it.
+
+        If it succeeds and finds a single entry, it returns it. Otherwise it
+        returns false.
+        """
+        try:
+            blockheight = int(query_str.replace(',', ''))
+        except ValueError:
+            return False
+        else:
+            # If we query a single block, return the template for it
+            try:
+                block = cls.query.filter_by(height=blockheight).one()
+            except sqlalchemy.exc.SQLAlchemyError:
+                return False
+            else:
+                return block
 
 
 transaction_addresses = db.Table('transaction_addresses',

@@ -1,4 +1,5 @@
 import os
+import binascii
 
 from flask import render_template, Blueprint, send_from_directory
 
@@ -6,7 +7,7 @@ import bitcoin.core as core
 import bitcoin.base58 as base58
 
 from . import models as m
-from . import db, root
+from . import root
 
 main = Blueprint('main', __name__)
 
@@ -52,13 +53,27 @@ def favicon():
         os.path.join(root, 'static'),
         'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
+
 @main.route('/search/<query>')
 def search(query):
-    blob = core.lx(query)
 
-    # Query for items
-    blocks = m.Block.query.filter(m.Block.hash.like(blob)).limit(10)
-    transactions = m.Transaction.query.filter(m.Transaction.txid.like(blob)).limit(10)
+    # Attempt to match query to a single block in the DB
+    block = m.Block.lookup_blockheight(query)
+    if block:
+        return render_template('block.html', block=block)
+
+    # Format query for blocks/transactions
+    try:
+        blob = core.lx(query)
+    except binascii.Error:
+        blocks = []
+        transactions = []
+    else:
+        # Query for items blocks/transactions
+        blocks = m.Block.query.filter(m.Block.hash.like(blob)).limit(10)
+        transactions = (m.Transaction.query
+                        .filter(m.Transaction.txid.like(blob)).limit(10))
+
     return render_template('search_results.html',
                            blocks=blocks,
                            transactions=transactions)
