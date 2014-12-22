@@ -39,6 +39,23 @@ def sync():
     highest = Block.query.order_by(Block.height.desc()).first()
     server_height = coinserv.getblockcount()
 
+    # Check for forks, but only if we're relatively sync'd up
+    if highest and server_height <= highest.height + 150:
+        server_highest_hash = coinserv.getblockhash(highest.height)
+        if server_highest_hash != highest.hash:
+            # Delete blocks until we find a common ancestor
+            while True:
+                prev_height = highest.height - 1
+                second_highest = Block.query.filter_by(height=prev_height).one()
+                server_prev_hash = coinserv.getblockhash(second_highest.height)
+                db.session.delete(highest)
+                if server_prev_hash == second_highest.hash:
+                    db.session.commit()
+                    break
+                else:
+                    highest = second_highest
+
+
     block_times = deque([], maxlen=1000)
     while loop:
         t = time.time()
