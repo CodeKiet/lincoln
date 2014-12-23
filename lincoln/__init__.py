@@ -1,5 +1,7 @@
 import os
 import sys
+import jinja2
+import subprocess
 import yaml
 import logging
 import inspect
@@ -22,14 +24,24 @@ redis_conn = LocalProxy(
     lambda: getattr(current_app, 'redis', None))
 
 
-def create_app(log_level="INFO", config="config.yml"):
-    app = Flask(__name__)
+def create_app(log_level="INFO", config="/config.yml"):
+    app = Flask(__name__, static_folder='../static', static_url_path='/static')
     app.secret_key = 'test'
     app.config.from_object(__name__)
 
-    config_vars = yaml.load(open(root + '/config.yml'))
     # inject all the yaml configs
+    config_vars = yaml.load(open(root + config))
     app.config.update(config_vars)
+
+    # set our template paths
+    global_path = app.config.get('template_global_path', '../lincoln_global/templates')
+    template_paths = [os.path.join(root, global_path), os.path.join(root, 'lincoln/templates')]
+    template_loader = jinja2.ChoiceLoader([
+            jinja2.FileSystemLoader(template_paths),
+            app.jinja_loader])
+    app.jinja_loader = template_loader
+
+    # Init the db & migrations
     db.init_app(app)
     Migrate(app, db)
 
@@ -53,6 +65,17 @@ def create_app(log_level="INFO", config="config.yml"):
     handler.setFormatter(log_format)
     logger.addHandler(handler)
 
+    # try and fetch the git version information
+    try:
+        output = subprocess.check_output(b"git show -s --format='%ci %h'",
+                                         shell=True).strip().rsplit(b" ", 1)
+        app.config['hash'] = output[1]
+        app.config['revdate'] = output[0]
+    # celery won't work with this, so set some default
+    except Exception:
+        app.config['hash'] = ''
+        app.config['revdate'] = ''
+
     # Dynamically add all the filters in the filters.py file
     for name, func in inspect.getmembers(filters, inspect.isfunction):
         app.jinja_env.filters[name] = func
@@ -62,8 +85,7 @@ def create_app(log_level="INFO", config="config.yml"):
         .format(app.config['coinserv']['username'],
                 app.config['coinserv']['password'],
                 app.config['coinserv']['address'],
-                app.config['coinserv']['port'])
-        )
+                app.config['coinserv']['port']))
 
     from . import views
     app.register_blueprint(views.main)

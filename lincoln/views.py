@@ -1,13 +1,20 @@
 import os
 import bitcoin.core as core
 
-from flask import render_template, Blueprint, send_from_directory
+from flask import render_template, Blueprint, send_from_directory, current_app, \
+    g
 
 from . import models as m
 from . import root
 
 main = Blueprint('main', __name__)
 
+
+@main.before_request
+def glob_vars():
+    g.currency = current_app.config['currency']['name']
+    g.assets_address = current_app.config['assets_address']
+    g.rev_hash = current_app.config['hash']
 
 @main.route('/address/<address>')
 def address(address):
@@ -41,8 +48,9 @@ def transactions():
 @main.route('/')
 @main.route('/blocks')
 def blocks():
-    blocks = m.Block.query.order_by(m.Block.height.desc()).limit(100)
-    return render_template('blocks.html', blocks=blocks)
+    blocks = m.Block.query.order_by(m.Block.height.desc()).limit(20)
+    return render_template('blocks.html', blocks=blocks,
+                           currency=current_app.config['currency']['name'])
 
 
 @main.route('/favicon.ico')

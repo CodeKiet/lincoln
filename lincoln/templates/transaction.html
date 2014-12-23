@@ -1,7 +1,7 @@
 {% if transaction %}
-  {% set title = "Transaction " + transaction.txid | bytes %}
+  {% set title = g.currency ~ " Transaction " + transaction.txid | bytes %}
 {% else %}
-  {% set title = "Transaction Not Found" %}
+  {% set title = g.currency ~ " Transaction Not Found" %}
 {% endif %}
 {% extends "base.html" %}
 {% block content %}

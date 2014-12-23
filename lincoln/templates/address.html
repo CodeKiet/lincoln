@@ -1,5 +1,5 @@
 {% if address_obj %}
-  {% set title = "Address History - " + address_obj.hash_str %}
+  {% set title = g.currency ~ " Address History - " + address_obj.hash_str %}
 {% else %}
   {% set title = "Address Not Found" %}
 {% endif %}
