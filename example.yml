@@ -15,6 +15,7 @@ coinserv:
     address: 127.0.0.1
     username: litecoinrpc
     password: 22222222222
+    remote: True
 
 currency:
     code: "LTC"

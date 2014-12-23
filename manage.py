@@ -58,6 +58,11 @@ def sync():
 
     block_times = deque([], maxlen=1000)
     while loop:
+
+        # Don't flood the RPC server if it is remote
+        if current_app.config['coinserv'].get('remote', False):
+            time.sleep(1)
+
         t = time.time()
         if not highest:
             curr_height = 0
