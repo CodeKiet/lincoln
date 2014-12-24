@@ -47,9 +47,10 @@
   {% set addresses = similar_addrs %}
   {% include "address_table.html" %}
   {% endif %}
+  </div>
 </div>
 
-
-{#<h3>Output History for {{ address }}</h3>#}
-{#{% include "output_table.html" %}#}
+{% set outputs = address_obj.outputs %}
+<h3>Output History for {{ address_obj.hash_str }}</h3>
+{% include "output_table.html" %}
 {% endblock %}
