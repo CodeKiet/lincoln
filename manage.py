@@ -31,7 +31,12 @@ def sync():
     loop = [1]
 
     def handler(signum, frame):
-        loop.remove(1)
+        # Fist SIGINT exits after next loop finishes
+        if 1 in loop:
+            loop.remove(1)
+        # Second SIGINT exits immediately
+        else:
+            exit(0)
 
     signal.signal(signal.SIGINT, handler)
 
@@ -114,12 +119,13 @@ def sync():
                     continue
 
                 addr = Address.get_addr(dest_address, addr_version)
-                addr.transactions.append(tx_obj)
+                if not addr.first_seen_at:
+                    addr.first_seen_at = tx_obj.block.ntime
                 out.address = addr
-                db.session.flush()
-
                 # Update address total in amount
                 addr.total_in += out.amount
+
+            db.session.flush()
 
             if not tx.is_coinbase():
                 for txin in tx.vin:

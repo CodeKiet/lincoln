@@ -96,13 +96,6 @@ class Block(base):
             return blocks
 
 
-transaction_addresses = db.Table('transaction_addresses',
-                     db.Column('transaction_id', db.Integer,
-                               db.ForeignKey('transaction.id')),
-                     db.Column('address_id', db.Integer,
-                               db.ForeignKey('address.id')))
-
-
 class Transaction(base):
     id = db.Column(db.Integer, primary_key=True)
     txid = db.Column(db.LargeBinary(64), unique=True)
@@ -112,9 +105,6 @@ class Transaction(base):
     block_id = db.Column(db.Integer, db.ForeignKey('block.id'))
     block = db.relationship('Block', foreign_keys=[block_id],
                             backref='transactions')
-    # Points to the the addresses in this transaction
-    addresses = db.relationship('Address', secondary=transaction_addresses,
-                                backref=db.backref('transactions'))
     # Cache of all outputs in and out
     total_in = db.Column(db.Numeric)
     total_out = db.Column(db.Numeric)
@@ -155,8 +145,6 @@ class Transaction(base):
         limit = current_app.config.get('search_result_limit', 10)
         try:
             txs = cls.query.filter(cls.txid.like(hash)).limit(limit).all()
-            print(txs)
-            print(hash)
         except sqlalchemy.exc.SQLAlchemyError:
             return []
         else:
@@ -175,14 +163,11 @@ class Address(base):
     # Cached metadata
     total_in = db.Column(db.Numeric, default=0)
     total_out = db.Column(db.Numeric, default=0)
+    first_seen_at = db.Column(db.DateTime)
 
     __table_args__ = (
         db.Index('address_version', 'version'),
     )
-
-    @property
-    def first_seen_at(self):
-        return self.transactions[0].block.ntime
 
     @property
     def hash_str(self):

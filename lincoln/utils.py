@@ -1,6 +1,30 @@
 from bitcoin.core import serialize
 from flask import current_app
 import bitcoin.core.script as op
+import time
+
+
+class Benchmark(object):
+    def __init__(self, name):
+        self.name = name
+
+    def __enter__(self):
+        self.start = time.time()
+
+    def __exit__(self, ty, val, tb):
+        end = time.time()
+        current_app.logger.info("BENCHMARK: {} in {}"
+                                .format(self.name, time_format(end - self.start)))
+        return False
+
+
+def time_format(seconds):
+    # microseconds
+    if seconds <= 1.0e-3:
+        return "{:,.4f} us".format(seconds * 1000000.0)
+    if seconds <= 1.0:
+        return "{:,.4f} ms".format(seconds * 1000.0)
+    return "{:,.4f} sec".format(seconds)
 
 
 def get_int_from_str(str):
