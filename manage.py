@@ -1,10 +1,12 @@
 import logging
+import decorator
 from flask import current_app
 from flask.ext.script import Manager
 from flask.ext.migrate import MigrateCommand
 from decimal import Decimal
 from collections import deque
 import signal
+import sqlalchemy
 
 from lincoln import create_app, db, coinserv
 from lincoln.models import Block, Transaction, Output, Address
@@ -17,7 +19,29 @@ manager = Manager(create_app)
 manager.add_command('db', MigrateCommand)
 
 
+@decorator.decorator
+def crontab(func, *args, **kwargs):
+    """ Handles rolling back SQLAlchemy exceptions to prevent breaking the
+    connection for the whole scheduler. Also records timing information into
+    the cache """
+
+    res = None
+    try:
+        res = func(*args, **kwargs)
+    except sqlalchemy.exc.SQLAlchemyError as e:
+        current_app.logger.error("SQLAlchemyError occurred, rolling back: {}".
+                                 format(e))
+        current_app.db.session.rollback()
+    except Exception:
+        current_app.logger.error("Unhandled exception in {}"
+                                 .format(func.__name__), exc_info=True)
+        raise
+
+    return res
+
+
 @manager.command
+@crontab
 def init_db():
     db.session.commit()
     db.drop_all()
@@ -25,9 +49,10 @@ def init_db():
 
 
 @manager.command
+@crontab
 def sync():
 
-    # Kinda hacky, but simple & effective
+    # Kinda hacky, but simple & effective way to break loop on SIGINT
     loop = [1]
 
     def handler(signum, frame):
@@ -37,7 +62,6 @@ def sync():
         # Second SIGINT exits immediately
         else:
             exit(0)
-
     signal.signal(signal.SIGINT, handler)
 
     # Get the most recent block in our database
