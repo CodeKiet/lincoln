@@ -12,7 +12,7 @@
     <tbody>
     {% for block in blocks %}
     <tr>
-      <td style="max-width:135px;" data-sort-value="{{ block.timestamp }}">{{ block.ntime | human_date_utc }}</td>
+      <td data-sort-value="{{ block.timestamp }}">{{ block.ntime | human_date_utc }}</td>
       <td>{{ '{:,}'.format(block.difficulty | round(4)) }}</td>
       <td><a href="/block/{{ block.hash | bytes }}">{{ block.hash | bytes }}</a></td>
       <td>{{ '{:,}'.format(block.height) }}</td>

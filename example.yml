@@ -7,7 +7,7 @@ search_result_limit: 10
 # asset address
 assets_address: "/static"
 # template global path
-#template_global_path: "../lincoln_global/templates"
+#custom_template_path: "lincoln/custom_templates"
 
 # connection information for the coinserver RPC
 coinserv:

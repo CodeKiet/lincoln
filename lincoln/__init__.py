@@ -40,8 +40,8 @@ def create_app(log_level="INFO", config="/config.yml", global_config="/global.ym
     app.config.update(config_vars)
 
     # set our template paths
-    global_path = app.config.get('template_global_path', '../lincoln_global/templates')
-    template_paths = [os.path.join(root, global_path), os.path.join(root, 'lincoln/templates')]
+    custom_template_path = app.config.get('custom_template_path', 'lincoln/custom_templates')
+    template_paths = [os.path.join(root, custom_template_path), os.path.join(root, 'lincoln/templates')]
     template_loader = jinja2.ChoiceLoader([
             jinja2.FileSystemLoader(template_paths),
             app.jinja_loader])
