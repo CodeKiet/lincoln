@@ -15,6 +15,8 @@ def glob_vars():
     g.currency = current_app.config['currency']['name']
     g.assets_address = current_app.config['assets_address']
     g.rev_hash = current_app.config['hash']
+    if 'currencies' in current_app.config:
+        g.currencies = current_app.config['currencies']
 
 @main.route('/address/<address>')
 def address(address):

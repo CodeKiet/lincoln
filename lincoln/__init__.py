@@ -24,12 +24,18 @@ redis_conn = LocalProxy(
     lambda: getattr(current_app, 'redis', None))
 
 
-def create_app(log_level="INFO", config="/config.yml"):
+def create_app(log_level="INFO", config="/config.yml", global_config="/global.yml"):
     app = Flask(__name__, static_folder='../static', static_url_path='/static')
     app.secret_key = 'test'
     app.config.from_object(__name__)
 
     # inject all the yaml configs
+    try:
+        global_config_vars = yaml.load(open(root + global_config))
+        app.config.update(global_config_vars)
+    except FileNotFoundError:
+        pass
+
     config_vars = yaml.load(open(root + config))
     app.config.update(config_vars)
 
