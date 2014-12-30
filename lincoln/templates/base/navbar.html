@@ -13,10 +13,22 @@
       <ul class="nav navbar-nav navbar-left">
         <li{% if page == "blocks" %} class="active"{% endif %}><a href="/"><i class="fa fa-cubes"></i> Blocks</a></li>
         <li{% if page == "transactions" %} class="active"{% endif %}><a href="/transactions"><i class="fa fa-sitemap"></i> Transactions</a></li>
+        {% if g.currencies %}
+        <li class="dropdown">
+          <a href="#" class="dropdown-toggle" data-toggle="dropdown" aria-expanded="false"><i class="fa fa-globe"></i> Other Blockchains <b class="caret"></b></a>
+          <ul class="dropdown-menu">
+            {% for c, link in g.currencies.items() %}
+            <li{% if g.currency == c %} class="active"{% endif %}>
+              <a href="{{ link|safe }}">{{ c }}</a>
+            </li>
+            {% endfor %}
+          </ul>
+        </li>
+        {% endif %}
       </ul>
       <form class="navbar-form navbar-right" id="search">
-        <input type="text" class="form-control col-lg-8" placeholder="Search" id="query">
-        <button type="submit" class="btn btn-success">Go</button>
+        <input type="text" class="form-control col-lg-8" placeholder="Search blocks, transactions, addresses" id="query">
+        <button type="submit" class="btn btn-primary" style="margin-left:5px;">Go</button>
       </form>
     </div><!--/.nav-collapse -->
   </div>
