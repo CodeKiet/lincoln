@@ -2,7 +2,7 @@ import os
 import bitcoin.core as core
 
 from flask import render_template, Blueprint, send_from_directory, current_app, \
-    g
+    g, request
 
 from . import models as m
 from . import root
@@ -18,12 +18,24 @@ def glob_vars():
     if 'currencies' in current_app.config:
         g.currencies = current_app.config['currencies']
 
+
 @main.route('/address/<address>')
 def address(address):
-    # Query for matching addresses
+    outputs_per_page = int(current_app.config.get('outputs_per_page', 15))
+
+    index = int(request.args.get('index', 0))
+    if index < 0:
+        index = 0
+    offset = index * outputs_per_page
+
     similar_addrs = m.Address.get_search_results(address)
     if len(similar_addrs) == 1:
-        return render_template('address.html', address_obj=similar_addrs[0])
+        outputs = similar_addrs[0].outputs[offset:offset + outputs_per_page]
+        return render_template('address.html',
+                               address_obj=similar_addrs[0],
+                               outputs=outputs,
+                               outputs_per_page=outputs_per_page,
+                               index=index)
 
     return render_template('search_results.html',
                            addresses=similar_addrs)
@@ -41,18 +53,41 @@ def transaction(hash):
     return render_template('transaction.html', transaction=transaction)
 
 
-@main.route('/transactions')
+@main.route("/transactions")
 def transactions():
-    transactions = m.Transaction.query.order_by(m.Transaction.id.desc()).limit(100)
-    return render_template('transactions.html', transactions=transactions)
+    trans_per_page = int(current_app.config.get('trans_per_page', 25))
+
+    index = int(request.args.get('index', 0))
+    if index < 0:
+        index = 0
+    offset = index * trans_per_page
+    transactions = (m.Transaction.query
+                                 .order_by(m.Transaction.id.desc())
+                                 .offset(offset)
+                                 .limit(trans_per_page))
+
+    return render_template('transactions.html',
+                           transactions=transactions,
+                           index=index)
 
 
 @main.route('/')
-@main.route('/blocks')
+@main.route("/blocks")
 def blocks():
-    blocks = m.Block.query.order_by(m.Block.height.desc()).limit(20)
-    return render_template('blocks.html', blocks=blocks,
-                           currency=current_app.config['currency']['name'])
+    trans_per_page = int(current_app.config.get('blocks_per_page', 20))
+
+    index = int(request.args.get('index', 0))
+    if index < 0:
+        index = 0
+    offset = index * trans_per_page
+    blocks = (m.Block.query.order_by(m.Block.height.desc())
+                           .offset(offset)
+                           .limit(trans_per_page))
+
+    return render_template('blocks.html',
+                           blocks=blocks,
+                           currency=current_app.config['currency']['name'],
+                           index=index)
 
 
 @main.route('/favicon.ico')

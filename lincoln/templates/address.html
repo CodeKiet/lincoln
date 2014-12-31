@@ -50,7 +50,12 @@
   </div>
 </div>
 
-{% set outputs = address_obj.outputs %}
-<h3>Output History for {{ address_obj.hash_str }}</h3>
+<h3>History for {{ address_obj.hash_str }}</h3>
 {% include "output_table.html" %}
+{% if outputs|count == outputs_per_page %}
+<ul class="pager">
+  <li class="previous {% if not index %}disabled{% endif %}"><a href="?index={{ index - 1 }}">&larr; Newer</a></li>
+  <li class="next"><a href="?index={{ index + 1 }}">Older &rarr;</a></li>
+</ul>
+{% endif %}
 {% endblock %}
