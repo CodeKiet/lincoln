@@ -155,7 +155,7 @@ class Address(base):
     # An id value to make foreign keys more compact
     id = db.Column(db.Integer, primary_key=True)
     # the hash of the address
-    hash = db.Column(db.LargeBinary, unique=True, nullable=False)
+    hash = db.Column(db.LargeBinary, unique=True, nullable=False, index=True)
 
     version = db.Column(db.Integer, nullable=False)
     currency = db.Column(db.String, nullable=False)
