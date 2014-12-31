@@ -241,7 +241,8 @@ class Output(base):
     # Where this Output was created at
     origin_tx_hash = db.Column(db.LargeBinary(64),
                                db.ForeignKey('transaction.txid'),
-                               primary_key=True)
+                               primary_key=True,
+                               index=True)
     origin_tx = db.relationship('Transaction', foreign_keys=[origin_tx_hash],
                                 backref='origin_txs')
 
@@ -256,7 +257,8 @@ class Output(base):
                               backref='outputs')
 
     # Point to the tx we spent this output in, or null if UTXO
-    spend_tx_id = db.Column(db.Integer, db.ForeignKey('transaction.id'))
+    spend_tx_id = db.Column(db.Integer, db.ForeignKey('transaction.id'),
+                            index=True)
     spent_tx = db.relationship('Transaction', foreign_keys=[spend_tx_id],
                                backref='spent_txs')
 
