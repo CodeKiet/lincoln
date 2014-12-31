@@ -252,7 +252,8 @@ class Output(base):
     index = db.Column(db.SmallInteger, primary_key=True)
 
     # Address that gets to spend this output. Will be null for unusual tx types
-    address_hash = db.Column(db.LargeBinary, db.ForeignKey('address.hash'))
+    address_hash = db.Column(db.LargeBinary, db.ForeignKey('address.hash'),
+                             index=True)
     address = db.relationship('Address', foreign_keys=[address_hash],
                               backref='outputs')
 
