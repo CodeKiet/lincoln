@@ -99,11 +99,22 @@ def favicon():
 
 @main.route('/search/<query>')
 def search(query):
+    outputs_per_page = int(current_app.config.get('outputs_per_page', 15))
+
+    index = int(request.args.get('index', 0))
+    if index < 0:
+        index = 0
+    offset = index * outputs_per_page
 
     # Get matching addresses
     addresses = m.Address.get_search_results(query)
     if len(addresses) == 1:
-        return render_template('address.html', address_obj=addresses[0])
+        outputs = addresses[0].outputs[offset:offset + outputs_per_page]
+        return render_template('address.html',
+                               address_obj=addresses[0],
+                               outputs=outputs,
+                               outputs_per_page=outputs_per_page,
+                               index=index)
 
     # Get matching transactions
     transactions = m.Transaction.get_search_results(query)
