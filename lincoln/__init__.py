@@ -2,7 +2,6 @@ import os
 import sys
 import jinja2
 import subprocess
-import pyinotify
 import yaml
 import logging
 import inspect
@@ -15,11 +14,9 @@ from bitcoin.rpc import Proxy
 from redis import Redis
 
 import lincoln.filters as filters
-from lincoln.notifier import NotifyCallback
 
 root = os.path.abspath(os.path.dirname(__file__) + '/../')
 db = SQLAlchemy()
-wm = pyinotify.WatchManager()
 
 coinserv = LocalProxy(
     lambda: getattr(current_app, 'rpc_connection', None))
@@ -33,25 +30,14 @@ def create_app(log_level="INFO", config="/config.yml", global_config="/global.ym
     app.config.from_object(__name__)
 
     # inject all the yaml configs
-    g_cfg_location = root + global_config
-    cfg_location = root + config
-
-    config_vars = yaml.load(open(cfg_location))
-    app.config.update(config_vars)
-
     try:
-        global_config_vars = yaml.load(open(g_cfg_location))
+        global_config_vars = yaml.load(open(root + global_config))
         app.config.update(global_config_vars)
     except FileNotFoundError:
         pass
-    else:
-        # Watch for file modifications
-        app.wm = wm
-        watch_mask = pyinotify.IN_MODIFY  # only watch for file modification
-        if not hasattr(app, 'notifier'):
-            app.notifier = pyinotify.ThreadedNotifier(wm, NotifyCallback(app, g_cfg_location))
-            app.notifier.start()
-            wm.add_watch(g_cfg_location, watch_mask)
+
+    config_vars = yaml.load(open(root + config))
+    app.config.update(config_vars)
 
     # set our template paths
     custom_template_path = app.config.get('custom_template_path', 'lincoln/custom_templates')
