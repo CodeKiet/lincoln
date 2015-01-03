@@ -85,6 +85,11 @@ def create_app(log_level="INFO", config="/config.yml", global_config="/global.ym
     handler.setFormatter(log_format)
     logger.addHandler(handler)
 
+    log_location = app.config['currency']['code'] + ".log"
+    hdlr = logging.FileHandler(log_location)
+    hdlr.setFormatter(log_format)
+    logger.addHandler(hdlr)
+
     # try and fetch the git version information
     try:
         output = subprocess.check_output(b"git show -s --format='%ci %h'",

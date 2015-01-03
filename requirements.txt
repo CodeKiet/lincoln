@@ -17,5 +17,6 @@ psycopg2==2.5.2
 python-bitcoinlib==0.2.1
 redis==2.10.3
 decorator==3.4.0
+pyinotify==0.9.4
 
 ago==0.0.6
