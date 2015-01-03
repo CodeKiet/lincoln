@@ -1,4 +1,5 @@
 import logging
+from bitcoin import core
 import decorator
 from flask import current_app
 from flask.ext.script import Manager
@@ -30,8 +31,8 @@ def crontab(func, *args, **kwargs):
         res = func(*args, **kwargs)
     except sqlalchemy.exc.SQLAlchemyError as e:
         current_app.logger.error("SQLAlchemyError occurred, rolling back: {}".
-                                 format(e))
-        current_app.db.session.rollback()
+                                 format(e), exc_info=True)
+        db.session.rollback()
     except Exception:
         current_app.logger.error("Unhandled exception in {}"
                                  .format(func.__name__), exc_info=True)
@@ -47,6 +48,23 @@ def init_db():
     db.drop_all()
     db.create_all()
 
+
+@manager.command
+@crontab
+def delete_highest_block():
+    block = Block.query.order_by(Block.height.desc()).first()
+    for tx in block.transactions:
+        # Reverse spent TX output changes & drop
+        for stxo in tx.origin_txs:
+            stxo.address.total_out -= stxo.amount
+            db.session.delete(stxo)
+        # Reverse unspent TX output changes & drop
+        for utxo in tx.spent_txs:
+            utxo.address.total_in -= utxo.amount
+            db.session.delete(utxo)
+        db.session.delete(tx)
+    db.session.delete(block)
+    db.session.commit()
 
 @manager.command
 @crontab
