@@ -54,10 +54,10 @@ def init_db():
 def delete_highest_block():
     block = Block.query.order_by(Block.height.desc()).first()
     for tx in block.transactions:
-        # Reverse spent TX output changes & drop
+        # Reverse spent TX output changes
         for stxo in tx.origin_txs:
             stxo.address.total_out -= stxo.amount
-            db.session.delete(stxo)
+            stxo.spent_tx = None
         # Reverse unspent TX output changes & drop
         for utxo in tx.spent_txs:
             utxo.address.total_in -= utxo.amount
