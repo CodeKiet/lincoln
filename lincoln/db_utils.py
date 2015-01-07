@@ -1,0 +1,76 @@
+from _decimal import Decimal
+from flask import current_app
+import sqlalchemy
+from lincoln import coinserv
+from lincoln.models import Transaction, Output, Address
+from lincoln.utils import parse_output_sript
+
+
+def get_output_from_txin(txin):
+    """
+    This utility takes a txin and queries the DB for it. If it fails to find
+    one then it proceeds to run an RPC query to try and re-add it to the DB.
+
+    If it fails to locate the output it'll raise an exception
+    """
+
+    out = None
+    try:
+        out = Output.query.filter_by(
+            origin_tx_hash=txin.prevout.hash,
+            index=txin.prevout.n).one()
+    except sqlalchemy.orm.exc.NoResultFound:
+        current_app.logger.warn(
+            "Output with origin_tx_hash {} and index {} was not found! "
+            "Attempting to grab the origin block and tx from the RPC to reindex"
+            " it...".format(txin.prevout.hash, txin.prevout.n))
+
+        tx_obj = Transaction.query.filter_by(txid=txin.prevout.hash).one()
+        # grab the block from RPC
+        block = coinserv.getblock(tx_obj.block.hash)
+
+        for tx in block.vtx:
+            if tx.GetHash() != txin.prevout.hash:
+                current_app.logger.debug("Block tx {} didn't match ours."
+                                         .format(tx.GetHash()))
+                continue
+
+            for i, txout in enumerate(tx.vout):
+
+                try:
+                    output = Output.query\
+                        .filter_by(origin_tx_hash=tx.GetHash(),
+                                   index=i).one()
+                except sqlalchemy.orm.exc.NoResultFound:
+                    # add the missing one
+                    out_dec = Decimal(txout.nValue) / 100000000
+                    out = Output(origin_tx=tx_obj,
+                                 index=i,
+                                 amount=out_dec)
+                    current_app.logger.debug(
+                        "Adding output {} to tx {}"
+                        .format(out.__dict__, txin.prevout.hash))
+
+                    tx_obj.total_out += out_dec
+                    dest_address, out.type = parse_output_sript(txout)
+
+                    if out.type != 3:
+                        addr_version = current_app.config['currency'][out.type_str + '_address_version']
+                    else:
+                        continue
+
+                    addr = Address.get_addr(dest_address, addr_version)
+                    if not addr.first_seen_at:
+                        addr.first_seen_at = tx_obj.block.ntime
+                    out.address = addr
+                    # Update address total in amount
+                    addr.total_in += out.amount
+                else:
+                    current_app.logger.info("Located output {}".format(output))
+
+    if not out:
+        raise sqlalchemy.orm.exc.NoResultFound(
+            "Unable to locate Output with origin_tx_hash {} and index {}!"
+            .format(txin.prevout.hash, txin.prevout.n))
+    else:
+        return out

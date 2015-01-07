@@ -1,5 +1,4 @@
 import logging
-from bitcoin import core
 import decorator
 from flask import current_app
 from flask.ext.script import Manager
@@ -15,6 +14,7 @@ from lincoln.models import Block, Transaction, Output, Address
 import time
 import datetime
 from lincoln.utils import parse_output_sript
+from lincoln.db_utils import get_output_from_txin
 
 manager = Manager(create_app)
 manager.add_command('db', MigrateCommand)
@@ -49,22 +49,25 @@ def init_db():
     db.create_all()
 
 
-@manager.command
-@crontab
-def delete_highest_block():
-    block = Block.query.order_by(Block.height.desc()).first()
-    for tx in block.transactions:
-        # Reverse spent TX output changes
-        for stxo in tx.origin_txs:
-            stxo.address.total_out -= stxo.amount
-            stxo.spent_tx = None
-        # Reverse unspent TX output changes & drop
-        for utxo in tx.spent_txs:
-            utxo.address.total_in -= utxo.amount
-            db.session.delete(utxo)
-        db.session.delete(tx)
-    db.session.delete(block)
-    db.session.commit()
+# Don't use - likely broken
+# @manager.command
+# @crontab
+# def delete_highest_block():
+#     block = Block.query.order_by(Block.height.desc()).first()
+#     for tx in block.transactions:
+#         # Reverse spent TX output changes
+#         for stxo in tx.origin_txs[:]:
+#             if stxo.spend_tx_id:
+#                 tx.origin_txs.remove(stxo)
+#             if stxo.address:
+#                 stxo.address.total_in -= stxo.amount
+#         # Reverse unspent TX output changes & drop
+#         for utxo in tx.spent_txs:
+#             utxo.address.total_out -= utxo.amount
+#             db.session.delete(utxo)
+#         db.session.delete(tx)
+#     db.session.delete(block)
+#     db.session.commit()
 
 @manager.command
 @crontab
@@ -171,14 +174,12 @@ def sync():
 
             if not tx.is_coinbase():
                 for txin in tx.vin:
-                    obj = Output.query.filter_by(
-                        origin_tx_hash=txin.prevout.hash,
-                        index=txin.prevout.n).one()
-                    obj.spent_tx = tx_obj
-                    tx_obj.total_in += obj.amount
+                    output = get_output_from_txin(txin)
+                    output.spent_tx = tx_obj
+                    tx_obj.total_in += output.amount
 
                     # Update address total out amount
-                    obj.address.total_out += obj.amount
+                    output.address.total_out += output.amount
             else:
                 tx_obj.coinbase = True
 
