@@ -1,12 +1,12 @@
 from _decimal import Decimal
 from flask import current_app
 import sqlalchemy
-from lincoln import coinserv
+from lincoln import coinserv, db
 from lincoln.models import Transaction, Output, Address
 from lincoln.utils import parse_output_sript
 
 
-def get_output_from_txin(txin):
+def get_output_from_txin(txin, block_obj):
     """
     This utility takes a txin and queries the DB for it. If it fails to find
     one then it proceeds to run an RPC query to try and re-add it to the DB.
@@ -24,8 +24,15 @@ def get_output_from_txin(txin):
             "Output with origin_tx_hash {} and index {} was not found! "
             "Attempting to grab the origin block and tx from the RPC to reindex"
             " it...".format(txin.prevout.hash, txin.prevout.n))
+        try:
+            tx_obj = Transaction.query.filter_by(txid=txin.prevout.hash).one()
+        except sqlalchemy.orm.exc.NoResultFound:
+            tx_obj = Transaction(block=block_obj,
+                                 txid=txin.prevout.hash,
+                                 total_in=0,
+                                 total_out=0)
+            db.session.add(tx_obj)
 
-        tx_obj = Transaction.query.filter_by(txid=txin.prevout.hash).one()
         # grab the block from RPC
         block = coinserv.getblock(tx_obj.block.hash)
 
@@ -73,4 +80,5 @@ def get_output_from_txin(txin):
             "Unable to locate Output with origin_tx_hash {} and index {}!"
             .format(txin.prevout.hash, txin.prevout.n))
     else:
+        db.session.flush()
         return out

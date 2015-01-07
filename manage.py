@@ -174,7 +174,7 @@ def sync():
 
             if not tx.is_coinbase():
                 for txin in tx.vin:
-                    output = get_output_from_txin(txin)
+                    output = get_output_from_txin(txin, block_obj)
                     output.spent_tx = tx_obj
                     tx_obj.total_in += output.amount
 
