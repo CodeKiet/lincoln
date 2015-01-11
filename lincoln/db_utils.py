@@ -32,6 +32,7 @@ def get_output_from_txin(txin, block_obj):
                                  total_in=0,
                                  total_out=0)
             db.session.add(tx_obj)
+            db.session.flush()
 
         # grab the block from RPC
         block = coinserv.getblock(tx_obj.block.hash)

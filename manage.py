@@ -6,6 +6,7 @@ from flask.ext.migrate import MigrateCommand
 from decimal import Decimal
 from collections import deque
 import signal
+import psycopg2
 import sqlalchemy
 
 from lincoln import create_app, db, coinserv
@@ -140,21 +141,40 @@ def sync():
 
         # all TX's in block are connectable; index
         for tx in block.vtx:
-            tx_obj = Transaction(block=block_obj,
-                                 txid=tx.GetHash(),
-                                 total_in=0,
-                                 total_out=0)
-            db.session.add(tx_obj)
+
+            tx_hash = tx.GetHash()
+            # We don't want to have to do a rollback, so query for the TX first
+            try:
+                tx_obj = Transaction.query.filter_by(txid=tx_hash).one()
+                tx_obj.block = block_obj
+                tx_obj.total_out = 0
+                tx_obj.total_in = 0
+            except sqlalchemy.orm.exc.NoResultFound:
+                tx_obj = Transaction(block=block_obj,
+                                     txid=tx_hash,
+                                     total_in=0,
+                                     total_out=0)
+                db.session.add(tx_obj)
+            db.session.flush()
+
             current_app.logger.debug("Found new tx {}".format(tx_obj))
 
             for i, txout in enumerate(tx.vout):
                 out_dec = Decimal(txout.nValue) / 100000000
                 tx_obj.total_out += out_dec
 
-                out = Output(origin_tx=tx_obj,
-                             index=i,
-                             amount=out_dec)
-                db.session.add(out)
+                # We don't want to have to do a rollback, so query for the
+                # output first
+                try:
+                    out = Output.query.filter_by(origin_tx_hash=tx_hash,
+                                                 amount=out_dec).one()
+                    out.index = i
+                except sqlalchemy.orm.exc.NoResultFound:
+                    out = Output(origin_tx=tx_obj,
+                                 index=i,
+                                 amount=out_dec)
+                    db.session.add(out)
+                db.session.flush()
 
                 dest_address, out.type = parse_output_sript(txout)
 
@@ -179,7 +199,8 @@ def sync():
                     tx_obj.total_in += output.amount
 
                     # Update address total out amount
-                    output.address.total_out += output.amount
+                    if output.address:
+                        output.address.total_out += output.amount
             else:
                 tx_obj.coinbase = True
 
