@@ -37,24 +37,27 @@ def get_output_from_txin(txin, block_obj):
         # grab the block from RPC
         block = coinserv.getblock(tx_obj.block.hash)
 
-        for tx in block.vtx:
-            if tx.GetHash() != txin.prevout.hash:
-                current_app.logger.debug("Block tx {} didn't match ours."
-                                         .format(tx.GetHash()))
-                continue
+        block_tx = None
+        for tx in block.vtx[:]:
+            if tx.GetHash() == txin.prevout.hash:
+                current_app.logger.debug("TX {} matched!".format(tx.GetHash()))
+                block_tx = tx
 
-            for i, txout in enumerate(tx.vout):
-
+        if block_tx:
+            for i, txout in enumerate(block_tx.vout):
+                out_dec = Decimal(txout.nValue) / 100000000
                 try:
-                    output = Output.query\
-                        .filter_by(origin_tx_hash=tx.GetHash(),
-                                   index=i).one()
+                    out = Output.query\
+                        .filter_by(origin_tx_hash=block_tx.GetHash(),
+                                   amount=out_dec).one()
+                    out.index = i
+                    db.session.flush()
                 except sqlalchemy.orm.exc.NoResultFound:
                     # add the missing one
-                    out_dec = Decimal(txout.nValue) / 100000000
                     out = Output(origin_tx=tx_obj,
                                  index=i,
                                  amount=out_dec)
+                    db.session.add(out)
                     current_app.logger.debug(
                         "Adding output {} to tx {}"
                         .format(out.__dict__, txin.prevout.hash))
@@ -74,7 +77,10 @@ def get_output_from_txin(txin, block_obj):
                     # Update address total in amount
                     addr.total_in += out.amount
                 else:
-                    current_app.logger.info("Located output {}".format(output))
+                    current_app.logger.info("Located output {}".format(out))
+        else:
+            current_app.logger.info("Transaction not located in block {}!"
+                                    .format(tx_obj.block.hash))
 
     if not out:
         raise sqlalchemy.orm.exc.NoResultFound(
