@@ -60,12 +60,12 @@
 </div>
 
 <h4>Outputs Spent</h4>
-{% set outputs = transaction.spent_txs %}
+{% set outputs = transaction.inputs %}
 {% set is_spend = True %}
 {% include "output_table.html" %}
 <h4>Outputs Created</h4>
 {% set is_spend = False %}
 {% set is_origin = True %}
-{% set outputs = transaction.origin_txs %}
+{% set outputs = transaction.outputs %}
 {% include "output_table.html" %}
 {% endblock %}

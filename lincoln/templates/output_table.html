@@ -35,9 +35,9 @@
         {% if is_spend %}
           <i class="fa fa-angle-up"></i> &nbsp;This TX
         {% else %}
-          {% if output.spent_tx %}
-            <a href="/transaction/{{ output.spent_tx.txid | bytes }}">
-              {{ output.spent_tx.txid | bytes | truncate(9, True) }}
+          {% if output.spend_tx %}
+            <a href="/transaction/{{ output.spend_tx.txid | bytes }}">
+              {{ output.spend_tx.txid | bytes | truncate(9, True) }}
               <i class="fa fa-angle-right"></i> 
             </a>
           {% else %}

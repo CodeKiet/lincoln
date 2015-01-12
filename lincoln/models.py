@@ -22,8 +22,8 @@ class Block(base):
     # Is block now orphaned?
     orphan = db.Column(db.Boolean, default=False)
     # Cache of all transactions in and out
-    total_in = db.Column(db.Numeric)
-    total_out = db.Column(db.Numeric)
+    total_in = db.Column(db.Numeric, default=0)
+    total_out = db.Column(db.Numeric, default=0)
     # Difficulty of block when solved
     difficulty = db.Column(db.Float, nullable=False)
     # 3-8 letter code for the currency that was mined
@@ -34,6 +34,14 @@ class Block(base):
     __table_args__ = (
         db.Index('blockheight', 'height'),
     )
+
+    def recalculate_total_in(self):
+        self.total_in = sum([tx.total_in for tx in self.transactions])
+        return self.total_in
+
+    def recalculate_total_out(self):
+        self.total_out = sum([tx.total_out for tx in self.transactions])
+        return self.total_out
 
     @property
     def timestamp(self):
@@ -95,6 +103,13 @@ class Block(base):
         else:
             return blocks
 
+    def remove(self):
+        # Delete transactions
+        for tx in self.transactions:
+            tx.remove()
+        db.session.delete(self)
+        db.session.flush()
+
 
 class Transaction(base):
     id = db.Column(db.Integer, primary_key=True)
@@ -106,8 +121,16 @@ class Transaction(base):
     block = db.relationship('Block', foreign_keys=[block_id],
                             backref='transactions')
     # Cache of all outputs in and out
-    total_in = db.Column(db.Numeric)
-    total_out = db.Column(db.Numeric)
+    total_in = db.Column(db.Numeric, default=0)
+    total_out = db.Column(db.Numeric, default=0)
+
+    def recalculate_total_in(self):
+        self.total_in = sum([input.amount for input in self.inputs])
+        return self.total_in
+
+    def recalculate_total_out(self):
+        self.total_out = sum([output.amount for output in self.outputs])
+        return self.total_out
 
     @property
     def hash_str(self):
@@ -150,6 +173,35 @@ class Transaction(base):
         else:
             return txs
 
+    @classmethod
+    def get(cls, tx_hash, block_obj):
+        # We don't want to have to do a rollback, so query for the TX first
+        try:
+            tx_obj = cls.query.filter_by(txid=tx_hash).one()
+            tx_obj.block = block_obj
+            tx_obj.total_out = 0
+            tx_obj.total_in = 0
+            current_app.logger.debug("Found old tx & overwrote {}".format(tx_obj))
+        except sqlalchemy.orm.exc.NoResultFound:
+            tx_obj = cls(block=block_obj, txid=tx_hash)
+            db.session.add(tx_obj)
+            current_app.logger.debug("Found new tx {}".format(tx_obj))
+        db.session.flush()
+        return tx_obj
+
+    def remove(self):
+        # Update block balances
+        self.block.total_out -= self.total_out
+        self.block.total_in -= self.total_in
+        # Delete tx inputs
+        for input in self.inputs:
+            input.remove()
+        # Delete tx outputs
+        for output in self.outputs:
+            output.remove()
+        db.session.delete(self)
+        db.session.flush()
+
 
 class Address(base):
     # An id value to make foreign keys more compact
@@ -168,6 +220,15 @@ class Address(base):
     __table_args__ = (
         db.Index('address_version', 'version'),
     )
+
+    def recalculate_total_in(self):
+        self.total_in = sum([output.amount for output in self.outputs])
+        return self.total_in
+
+    def recalculate_total_out(self):
+        self.total_out = sum([output.amount for output in self.outputs
+                              if output.spend_tx_id])
+        return self.total_out
 
     @property
     def hash_str(self):
@@ -241,10 +302,9 @@ class Output(base):
     # Where this Output was created at
     origin_tx_hash = db.Column(db.LargeBinary(64),
                                db.ForeignKey('transaction.txid'),
-                               primary_key=True,
-                               index=True)
+                               primary_key=True, index=True)
     origin_tx = db.relationship('Transaction', foreign_keys=[origin_tx_hash],
-                                backref='origin_txs')
+                                backref='outputs')
 
     # The amount it's worth
     amount = db.Column(db.Numeric)
@@ -260,8 +320,8 @@ class Output(base):
     # Point to the tx we spent this output in, or null if UTXO
     spend_tx_id = db.Column(db.Integer, db.ForeignKey('transaction.id'),
                             index=True)
-    spent_tx = db.relationship('Transaction', foreign_keys=[spend_tx_id],
-                               backref='spent_txs')
+    spend_tx = db.relationship('Transaction', foreign_keys=[spend_tx_id],
+                               backref='inputs')
 
     @property
     def type_icon(self):
@@ -290,3 +350,42 @@ class Output(base):
     @property
     def timestamp(self):
         return calendar.timegm(self.created_at.utctimetuple())
+
+    @classmethod
+    def get_input(cls, tx_hash, i):
+        out = cls.query.filter_by(origin_tx_hash=tx_hash, index=i).one()
+        # TODO: Re-lookup if output not located
+        # TODO: Add catch for multiple outputs found
+        db.session.flush()
+        return out
+
+    @classmethod
+    def get_output(cls, tx_hash, amount, i):
+        try:
+            out = cls.query.filter_by(origin_tx_hash=tx_hash, amount=amount,
+                                      index=i).one()
+        except sqlalchemy.orm.exc.NoResultFound:
+            try:
+                out = cls.query.filter_by(origin_tx_hash=tx_hash,
+                                          amount=amount).one()
+                out.index = i
+            # TODO: Add catch for multiple outputs found
+            except sqlalchemy.orm.exc.NoResultFound:
+                out = cls(origin_tx_hash=tx_hash, index=i, amount=amount)
+                db.session.add(out)
+        db.session.flush()
+        return out
+
+    def remove(self):
+        # Update address balances
+        if self.address:
+            self.address.total_in -= self.amount
+            if self.spend_tx_id:
+                self.address.total_out -= self.amount
+        # Update transaction balances
+        if self.origin_tx_hash:
+            self.origin_tx.total_out -= self.amount
+        if self.spend_tx_id:
+            self.spend_tx.total_in -= self.amount
+        db.session.delete(self)
+        db.session.flush()
