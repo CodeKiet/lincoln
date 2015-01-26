@@ -199,6 +199,7 @@ class Transaction(base):
         # Delete tx outputs
         for output in self.outputs:
             output.remove()
+        self.block.transactions.remove(self)
         db.session.delete(self)
         db.session.flush()
 
@@ -385,7 +386,9 @@ class Output(base):
         # Update transaction balances
         if self.origin_tx_hash:
             self.origin_tx.total_out -= self.amount
+            self.origin_tx.outputs.remove(self)
         if self.spend_tx_id:
             self.spend_tx.total_in -= self.amount
+            self.spend_tx.inputs.remove(self)
         db.session.delete(self)
         db.session.flush()
