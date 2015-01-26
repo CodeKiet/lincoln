@@ -104,6 +104,7 @@ class Block(base):
             return blocks
 
     def remove(self):
+        current_app.logger.debug("Preparing to remove Block {}".format(self))
         # Delete transactions
         for tx in self.transactions:
             tx.remove()
@@ -190,6 +191,7 @@ class Transaction(base):
         return tx_obj
 
     def remove(self):
+        current_app.logger.debug("Preparing to remove TX {}".format(self))
         # Update block balances
         self.block.total_out -= self.total_out
         self.block.total_in -= self.total_in
@@ -378,6 +380,7 @@ class Output(base):
         return out
 
     def remove(self):
+        current_app.logger.debug("Preparing to remove Output {}".format(self))
         # Update address balances
         if self.address:
             self.address.total_in -= self.amount
