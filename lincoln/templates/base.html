@@ -46,7 +46,7 @@
     <div class="container body-container">
 
       <!-- Header for the explorer ======================================= -->
-      {% include "base/advert_header.html" ignore missing %}
+      {% include "base/before_header.html" ignore missing %}
       {% include "base/explorer_header.html" %}
 
       <!-- Alerts ======================================================== -->
@@ -57,8 +57,9 @@
       {% endblock %}
     </div>
 
+     <!-- Footer content ================================================= -->
     {% include "base/footer.html" %}
-    {% include "base/analytics.html" ignore missing %}
+    {% include "base/after_footer.html" ignore missing %}
 
   </body>
 </html>
