@@ -7,6 +7,8 @@ from decimal import Decimal
 from collections import deque
 import signal
 import sqlalchemy
+import gevent
+from gevent.queue import Queue
 
 from lincoln import create_app, db, coinserv
 from lincoln.models import Block, Transaction, Output, Address
@@ -76,7 +78,8 @@ def sync():
     highest = Block.query.order_by(Block.height.desc()).first()
     server_height = coinserv.getblockcount()
 
-    current_app.logger.debug("Database height: {}, RPC height: {}")
+    current_app.logger.debug("Database height: {}, RPC height: {}"
+                             .format(highest.height, server_height))
     if highest and highest.height >= server_height:
         current_app.logger.info("Already sync'd up!")
         exit(0)
