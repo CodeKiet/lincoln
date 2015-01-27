@@ -7,8 +7,6 @@ from decimal import Decimal
 from collections import deque
 import signal
 import sqlalchemy
-import gevent
-from gevent.queue import Queue
 
 from lincoln import create_app, db, coinserv
 from lincoln.models import Block, Transaction, Output, Address
