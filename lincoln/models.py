@@ -356,7 +356,13 @@ class Output(base):
 
     @classmethod
     def get_input(cls, tx_hash, i):
-        out = cls.query.filter_by(origin_tx_hash=tx_hash, index=i).one()
+        try:
+            out = cls.query.filter_by(origin_tx_hash=tx_hash, index=i).one()
+        except sqlalchemy.orm.exc.NoResultFound:
+            current_app.logger.debug(
+                "Failed to locate input in Outputs table with origin_tx_hash: "
+                "{} and index: {}".format(tx_hash, i))
+            exit(0)
         # TODO: Re-lookup if output not located
         # TODO: Add catch for multiple outputs found
         db.session.flush()
@@ -368,14 +374,9 @@ class Output(base):
             out = cls.query.filter_by(origin_tx_hash=tx_hash, amount=amount,
                                       index=i).one()
         except sqlalchemy.orm.exc.NoResultFound:
-            try:
-                out = cls.query.filter_by(origin_tx_hash=tx_hash,
-                                          amount=amount).one()
-                out.index = i
-            # TODO: Add catch for multiple outputs found
-            except sqlalchemy.orm.exc.NoResultFound:
-                out = cls(origin_tx_hash=tx_hash, index=i, amount=amount)
-                db.session.add(out)
+            out = cls(origin_tx_hash=tx_hash, index=i, amount=amount)
+            db.session.add(out)
+        # TODO: Add catch for multiple outputs found
         db.session.flush()
         return out
 
