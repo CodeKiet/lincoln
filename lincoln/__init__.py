@@ -14,6 +14,7 @@ from bitcoin.rpc import Proxy
 from redis import Redis
 
 import lincoln.filters as filters
+from lincoln.utils import build_logger_from_config
 
 root = os.path.abspath(os.path.dirname(__file__) + '/../')
 db = SQLAlchemy()
@@ -60,16 +61,8 @@ def create_app(log_level="INFO", config="/config.yml", global_config="/global.ym
     else:
         app.redis = Redis(**redis_config)
 
-    del app.logger.handlers[0]
-    app.logger.setLevel(logging.NOTSET)
-    log_format = logging.Formatter('%(asctime)s [%(name)s] [%(levelname)s]: %(message)s')
-    app.log_level = getattr(logging, str(log_level), app.config.get('log_level', "INFO"))
-
-    logger = logging.getLogger()
-    logger.setLevel(app.log_level)
-    handler = logging.StreamHandler(stream=sys.stdout)
-    handler.setFormatter(log_format)
-    logger.addHandler(handler)
+    logger = build_logger_from_config(app.config, log_level)
+    app.logger.setLevel(logger.getEffectiveLevel())
 
     # try and fetch the git version information
     try:

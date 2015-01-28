@@ -1,7 +1,9 @@
+import logging
 from bitcoin.core import serialize
 from flask import current_app
 import bitcoin.core.script as op
 import time
+import sys
 
 
 class Benchmark(object):
@@ -25,6 +27,19 @@ def time_format(seconds):
     if seconds <= 1.0:
         return "{:,.4f} ms".format(seconds * 1000.0)
     return "{:,.4f} sec".format(seconds)
+
+
+def build_logger_from_config(config, log_level):
+
+    log_format = logging.Formatter('%(asctime)s [%(name)s] [%(levelname)s]: %(message)s')
+    log_level = getattr(logging, str(log_level), config.get('log_level', "INFO"))
+
+    logger = logging.getLogger()
+    logger.setLevel(log_level)
+    handler = logging.StreamHandler(stream=sys.stdout)
+    handler.setFormatter(log_format)
+    logger.addHandler(handler)
+    return logger
 
 
 def get_int_from_str(str):

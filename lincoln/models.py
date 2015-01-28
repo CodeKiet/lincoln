@@ -251,15 +251,15 @@ class Address(base):
         return "<Address h:{}>".format(self.hash_str)
 
     @classmethod
-    def get_addr(cls, address, addr_version):
+    def get_addr(cls, address, addr_version, curr_code, db=db):
         # lookup address object matching dest_addr
-        addr = Address.query.filter_by(hash=address, version=addr_version).first()
+        addr = db.session.query(cls).filter_by(hash=address, version=addr_version).first()
         if addr:
             return addr
 
         addr = Address(hash=address,
                        version=addr_version,
-                       currency=current_app.config['currency']['code'])
+                       currency=curr_code)
         db.session.add(addr)
         db.session.flush()
         return addr
@@ -355,23 +355,23 @@ class Output(base):
         return calendar.timegm(self.created_at.utctimetuple())
 
     @classmethod
-    def get_input(cls, tx_hash, i):
+    def get_input(cls, tx_hash, i, db=db):
         try:
-            out = cls.query.filter_by(origin_tx_hash=tx_hash, index=i).one()
+            out = db.session.query(cls).filter_by(origin_tx_hash=tx_hash, index=i).one()
         except sqlalchemy.orm.exc.NoResultFound:
             current_app.logger.debug(
                 "Failed to locate input in Outputs table with origin_tx_hash: "
                 "{} and index: {}".format(tx_hash, i))
-            exit(0)
+            raise
         # TODO: Re-lookup if output not located
         # TODO: Add catch for multiple outputs found
         db.session.flush()
         return out
 
     @classmethod
-    def get_output(cls, tx_hash, amount, i):
+    def get_output(cls, tx_hash, amount, i, db=db):
         try:
-            out = cls.query.filter_by(origin_tx_hash=tx_hash, amount=amount,
+            out = db.session.query(cls).filter_by(origin_tx_hash=tx_hash, amount=amount,
                                       index=i).one()
         except sqlalchemy.orm.exc.NoResultFound:
             out = cls(origin_tx_hash=tx_hash, index=i, amount=amount)
