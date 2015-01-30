@@ -196,10 +196,10 @@ class Transaction(base):
         self.block.total_out -= self.total_out
         self.block.total_in -= self.total_in
         # Delete tx inputs
-        for input in self.inputs:
+        for input in self.inputs[:]:
             input.remove()
         # Delete tx outputs
-        for output in self.outputs:
+        for output in self.outputs[:]:
             output.remove()
         self.block.transactions.remove(self)
         db.session.delete(self)
