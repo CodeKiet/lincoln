@@ -83,6 +83,7 @@ def parse_output_sript(txout):
         script_type = 2
         dest_address = serialize.Hash160(script[0])
     else:
-        current_app.logger.warn("Unrecognized script {}"
-                                .format(script))
+        pass
+        # current_app.logger.warn("Unrecognized script {}"
+        #                         .format(script))
     return dest_address, script_type

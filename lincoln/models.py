@@ -97,17 +97,21 @@ class Block(base):
 
         limit = current_app.config.get('search_result_limit', 10)
         try:
-            blocks = cls.query.filter(cls.hash.like(bhash)).limit(limit).all()
+            blocks = (cls.query.filter(cls.hash.like(b"%" + bhash + b"%"))
+                      .limit(limit).all())
         except sqlalchemy.exc.SQLAlchemyError:
             return []
         else:
             return blocks
 
-    def remove(self):
-        current_app.logger.debug("Preparing to remove Block {}".format(self))
+    def remove(self, logger=None):
+        if not logger:
+            logger = current_app.logger
+
+        logger.debug("Preparing to remove Block {}".format(self))
         # Delete transactions
         for tx in self.transactions:
-            tx.remove()
+            tx.remove(logger=logger)
         db.session.delete(self)
         db.session.flush()
 
@@ -168,39 +172,55 @@ class Transaction(base):
 
         limit = current_app.config.get('search_result_limit', 10)
         try:
-            txs = cls.query.filter(cls.txid.like(hash)).limit(limit).all()
+            txs = (cls.query.filter(cls.txid.like(b"%" + hash + b"%"))
+                   .limit(limit).all())
         except sqlalchemy.exc.SQLAlchemyError:
             return []
         else:
             return txs
 
     @classmethod
-    def get(cls, tx_hash, block_obj):
-        # We don't want to have to do a rollback, so query for the TX first
+    def get(cls, tx_hash, block_obj, session=None, logger=None):
+        """
+        This function first queries the DB for a TX. If it finds one it removes
+        it and (and any child relationships) and recreates it. Inefficient - but
+        effective.
+
+        Normally it'd be better to just attempt creation & catch failure - but
+        but we want to avoid session rollbacks
+        """
+        if not session:
+            session = db.session
+        if not logger:
+            logger = current_app.logger
+
         try:
-            tx_obj = cls.query.filter_by(txid=tx_hash).one()
-            tx_obj.block = block_obj
-            tx_obj.total_out = 0
-            tx_obj.total_in = 0
-            current_app.logger.debug("Found old tx & overwrote {}".format(tx_obj))
+            tx_obj = session.query(cls).filter_by(txid=tx_hash).one()
+            session.remove(tx_obj)
+            logger.debug("Removed {}".format(tx_obj))
         except sqlalchemy.orm.exc.NoResultFound:
-            tx_obj = cls(block=block_obj, txid=tx_hash)
-            db.session.add(tx_obj)
-            current_app.logger.debug("Found new tx {}".format(tx_obj))
-        db.session.flush()
+            pass
+
+        tx_obj = cls(block=block_obj, txid=tx_hash)
+        logger.debug("Created {}".format(tx_obj))
+        session.add(tx_obj)
+        session.flush()
         return tx_obj
 
-    def remove(self):
-        current_app.logger.debug("Preparing to remove TX {}".format(self))
+    def remove(self, logger=None):
+        if not logger:
+            logger = current_app.logger
+
+        logger.debug("Preparing to remove TX {}".format(self))
         # Update block balances
         self.block.total_out -= self.total_out
         self.block.total_in -= self.total_in
         # Delete tx inputs
         for input in self.inputs[:]:
-            input.remove()
+            input.remove(logger=logger)
         # Delete tx outputs
         for output in self.outputs[:]:
-            output.remove()
+            output.remove(logger=logger)
         self.block.transactions.remove(self)
         db.session.delete(self)
         db.session.flush()
@@ -251,17 +271,26 @@ class Address(base):
         return "<Address h:{}>".format(self.hash_str)
 
     @classmethod
-    def get_addr(cls, address, addr_version, curr_code, db=db):
+    def get_addr(cls, address, addr_version, curr_code, session=None):
+        """
+        This function first queries the DB for an address. If it can't find one
+        it creates one.
+
+        Normally it'd be better to just attempt creation & catch failure - but
+        but we want to avoid session rollbacks
+        """
+        if not session:
+            session = db.session
+
         # lookup address object matching dest_addr
-        addr = db.session.query(cls).filter_by(hash=address, version=addr_version).first()
+        addr = (session.query(cls).filter_by(hash=address, version=addr_version)
+                .first())
         if addr:
             return addr
 
-        addr = Address(hash=address,
-                       version=addr_version,
-                       currency=curr_code)
-        db.session.add(addr)
-        db.session.flush()
+        addr = Address(hash=address, version=addr_version, currency=curr_code)
+        session.add(addr)
+        session.flush()
         return addr
 
     @classmethod
@@ -289,7 +318,8 @@ class Address(base):
 
         limit = current_app.config.get('search_result_limit', 10)
         try:
-            addresses = cls.query.filter(cls.hash.like(b"%" + pkhash + b"%")).limit(limit).all()
+            addresses = (cls.query.filter(cls.hash.like(b"%" + pkhash + b"%"))
+                         .limit(limit).all())
         except sqlalchemy.exc.SQLAlchemyError:
             return []
         else:
@@ -355,33 +385,59 @@ class Output(base):
         return calendar.timegm(self.created_at.utctimetuple())
 
     @classmethod
-    def get_input(cls, tx_hash, i, db=db):
+    def get_input(cls, tx_hash, i, session=None, logger=None):
+        """
+        This function first queries the DB for an Input. If it can't find one
+        it logs an error
+
+        Normally it'd be better to just attempt creation & catch failure - but
+        but we want to avoid session rollbacks
+        """
+        if not session:
+            session = db.session
+        if not logger:
+            logger = current_app.logger
+
         try:
-            out = db.session.query(cls).filter_by(origin_tx_hash=tx_hash, index=i).one()
+            out = (session.query(cls).filter_by(origin_tx_hash=tx_hash, index=i)
+                   .one())
         except sqlalchemy.orm.exc.NoResultFound:
-            current_app.logger.debug(
+            logger.critical(
                 "Failed to locate input in Outputs table with origin_tx_hash: "
                 "{} and index: {}".format(tx_hash, i))
             raise
         # TODO: Re-lookup if output not located
         # TODO: Add catch for multiple outputs found
-        db.session.flush()
+        session.flush()
         return out
 
     @classmethod
-    def get_output(cls, tx_hash, amount, i, db=db):
+    def get_output(cls, tx_hash, amount, i, session=None):
+        """
+        This function first queries the DB for an Output. If it can't find one
+        it creates one.
+
+        Normally it'd be better to just attempt creation & catch failure - but
+        but we want to avoid session rollbacks
+        """
+        if not session:
+            session = db.session
+
         try:
-            out = db.session.query(cls).filter_by(origin_tx_hash=tx_hash, amount=amount,
-                                      index=i).one()
+            out = session.query(cls).filter_by(origin_tx_hash=tx_hash,
+                                               amount=amount, index=i).one()
         except sqlalchemy.orm.exc.NoResultFound:
             out = cls(origin_tx_hash=tx_hash, index=i, amount=amount)
-            db.session.add(out)
+            session.add(out)
         # TODO: Add catch for multiple outputs found
-        db.session.flush()
+        session.flush()
         return out
 
-    def remove(self):
-        current_app.logger.debug("Preparing to remove Output {}".format(self))
+    def remove(self, logger=None):
+        if not logger:
+            logger = current_app.logger
+
+        logger.debug("Preparing to remove Output {}".format(self))
         # Update address balances
         if self.address:
             self.address.total_in -= self.amount
