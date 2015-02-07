@@ -215,9 +215,9 @@ class Transaction(base):
         # Update block balances
         self.block.total_out -= self.total_out
         self.block.total_in -= self.total_in
-        # Delete tx inputs
+        # Remove the TX association from inputs
         for input in self.inputs[:]:
-            input.remove(logger=logger)
+            input.spend_tx_id = None
         # Delete tx outputs
         for output in self.outputs[:]:
             output.remove(logger=logger)
