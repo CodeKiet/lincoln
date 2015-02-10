@@ -12,6 +12,7 @@ down_revision = None
 
 from alembic import op
 import sqlalchemy as sa
+import lincoln
 
 
 def upgrade():

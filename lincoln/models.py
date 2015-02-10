@@ -230,7 +230,7 @@ class Address(base):
     # An id value to make foreign keys more compact
     id = db.Column(db.Integer, primary_key=True)
     # the hash of the address
-    hash = db.Column(db.LargeBinary, unique=True, nullable=False, index=True)
+    hash = db.Column(db.LargeBinary, nullable=False)
 
     version = db.Column(db.Integer, nullable=False)
     currency = db.Column(db.String, nullable=False)
@@ -241,7 +241,7 @@ class Address(base):
     first_seen_at = db.Column(db.DateTime)
 
     __table_args__ = (
-        db.Index('address_version', 'version'),
+        db.Index('address_hash', 'hash', 'version', unique=True),
     )
 
     def recalculate_total_in(self):
@@ -345,9 +345,15 @@ class Output(base):
     index = db.Column(db.SmallInteger, primary_key=True)
 
     # Address that gets to spend this output. Will be null for unusual tx types
-    address_hash = db.Column(db.LargeBinary, db.ForeignKey('address.hash'),
-                             index=True)
-    address = db.relationship('Address', foreign_keys=[address_hash],
+    address_hash = db.Column(db.LargeBinary, index=True)
+    address_version = db.Column(db.Integer)
+    __table_args__ = (
+        db.ForeignKeyConstraint(['address_hash', 'address_version'],
+                                ['address.hash', 'address.version']),
+    )
+
+    address = db.relationship('Address',
+                              foreign_keys=[address_hash, address_version],
                               backref='outputs')
 
     # Point to the tx we spent this output in, or null if UTXO
